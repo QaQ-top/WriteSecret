@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+  <style>
+    canvas {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+
+</body>
+
+</html>
+<script>
+
+  const StyleStr = 'display: none';
+
+  /**
+   * 字符串转 uint16
+   */
+  function strToUint16Array(str) {
+    let buf = new ArrayBuffer(str.length * 2);
+    let bufView = new Uint16Array(buf);
+    for (let i = 0, len = str.length; i < len; i++) {
+      bufView[i] = str.charCodeAt(i);
+    }
+    return bufView;
+  }
+
+  /**
+   * uint16转二进制字符串，并且拼接
+   */
+  function uint16ToBinaryStr(uint16) {
+    let uint16Binary = [];
+    let msgBinary = uint16.forEach(function (data) {
+      data = data.toString(2);
+      uint16Binary.push(appendStr(data + '', 16));
+    });
+    return uint16Binary.join('');
+  }
+
+
+
+  function appendStr(data, length) {
+    let strLength = data.length;
+    if (strLength < length) {
+      let addStr = '0'.repeat(length - strLength);
+      data = addStr + data;
+    }
+    return data;
+  }
+
+  
+  // "./money.png"
+  // "fd8988798FDSSad"
+  getImg("fd8988798FDSSad", "./money.png")
+  function getImg(key, url) {
+    let image = new Image();
+    image.src = url;
+    let uint16 = strToUint16Array(key);
+    let uint16BinaryStr = uint16ToBinaryStr(uint16);
+    image.onload = () => {
+      let canvas = document.createElement('canvas');
+      canvas.height = image.height;
+      canvas.width = image.width;
+      let ctx = canvas.getContext('2d');
+
+      ctx.drawImage(image, 0, 0);
+      let imageData = ctx.getImageData(0, 0, image.width, image.height);
+      uint16.forEach((i, n)=> {
+        imageData.data[n] = i
+      })
+      for (let i = 0; i < imageData.data.length; i++) {
+        if (((i + 1) % 4) === 0) { // 每过4位
+          let piexData = imageData.data[i];
+          let hexPiexData = piexData.toString(2); // 将当前位数转为 二进制
+          let changeValue = uint16BinaryStr.charAt((i + 1) / 4 - 1); // 表示第几个 4的余 找到 uint16BinaryStr 对应的 索引的值
+          if (changeValue) {
+            hexPiexData = hexPiexData.substring(0, hexPiexData.length - 1) + changeValue; // 将这个找到的 值 存在 hexPiexData的最后一位
+          }
+          imageData.data[i] = parseInt(hexPiexData, 2); // 将改变后的值转为十进制 存储到图片的流中
+        }
+      }
+      ctx.putImageData(imageData, 0, 0); // 绘制改变后的数据
+      if(window.confirm('是否下载注入字符串后的图片')) {
+        let downloadUrl = canvas.toDataURL("image/png");
+        let link = document.createElement('a');
+        link.download = 'key';
+        link.href = downloadUrl;
+        link.click();
+      }
+    }
+
+  }
+
+
+
+  function binaryStrToUnit16Array(binaryStr) {
+    let buf = new ArrayBuffer(parseInt(binaryStr.length / 8));
+    let bufView = new Uint16Array(buf);
+    let value = '';
+    for (let i = 0, len = binaryStr.length; i < len; i++) {
+      value += binaryStr.charAt(i)
+      if (!((i + 1) % 16)) {
+        bufView[(i + 1) / 16 - 1] = parseInt(value, 2);
+        value = '';
+      }
+    }
+    return bufView;
+  }
+
+  function imageToKey(imageData) {
+    let binaryTextInImg = '';
+    imageData.data.forEach(function (item, index) {
+      if (((index + 1) % 4) === 0) {
+        let piexData = imageData.data[index].toString(2);
+        let lastIndexStr = piexData.charAt(piexData.length - 1);
+        binaryTextInImg += lastIndexStr
+      }
+    });
+    const decoder = new TextDecoder("utf-8", {
+      fatal: false, // false 时转换不会报错 会将无效字符 替换 成 \uFFFD(�)
+      ignoreBOM: false
+    });
+    let strBuffer = binaryStrToUnit16Array(binaryTextInImg).buffer
+    let str = decoder.decode(strBuffer);
+    // 过滤 Unicode 空白 以及 �
+    return str.replace(/[\x00-\x20\x7F-\xA0\u1680\u180E\u2000-\u200B\u2028\u2029\u202F\u205F\u3000\uFEFF\uFFFD]/g, '')
+  }
+
+
+  function getKey(imageUrl) {
+    return new Promise((resolve, reject) => {
+      try {
+        let imageKey = new Image();
+        imageKey.src = imageUrl;
+        imageKey.onload = () => {
+          let canvas = document.createElement('canvas');
+          canvas.height = imageKey.height;
+          canvas.width = imageKey.width;
+          let ctx = canvas.getContext('2d');
+          ctx.drawImage(imageKey, 0, 0);
+          let imageData = ctx.getImageData(0, 0, imageKey.width, imageKey.height);
+          resolve(imageToKey(imageData));
+        }
+      } catch(e) {
+        reject(new Error('解析失败'))
+      }
+    });
+  }
+
+  getKey('./key.png').then(res => {
+    console.log(res)
+  })
+  .catch(err => { console.log(err) })
+
+</script>
